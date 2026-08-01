@@ -18,16 +18,15 @@ import json
 load_dotenv()
 
 # MongoDB
-MONGODB_URL = os.getenv("MONGODB_URL")
-async_client = AsyncIOMotorClient(MONGODB_URL, tlsCAFile=certifi.where()) if MONGODB_URL and MONGODB_URL.startswith("mongodb+srv") else AsyncIOMotorClient(MONGODB_URL) if MONGODB_URL else None
-db = async_client.gx1 if async_client else None
-nlp_collection = db.userdata if db else None
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://zainisrar2007_db_user:SUcRZUeK6sRJA3KL@cluster0.earf4sd.mongodb.net/")
+async_client = AsyncIOMotorClient(MONGODB_URL, tlsCAFile=certifi.where()) if MONGODB_URL.startswith("mongodb+srv") else AsyncIOMotorClient(MONGODB_URL)
+db = async_client.gx1
+nlp_collection = db.userdata
 
-# Cloudinary Configuration
 cloudinary.config(
-    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
-    api_key=os.getenv("CLOUDINARY_API_KEY"),
-    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+    cloud_name="dtkxm4abz",
+    api_key="135213472543525",
+    api_secret="7_RY2sgYVwKu04BAw1goYJn7aYY"
 )
 
 # OpenAI Configuration
@@ -35,7 +34,7 @@ openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # Penpot Configuration
 PENPOT_API_URL = os.environ.get("PENPOT_API_URL", "https://design.penpot.app")
-PENPOT_ACCESS_TOKEN = os.environ.get("PENPOT_ACCESS_TOKEN", "")
+PENPOT_ACCESS_TOKEN = os.environ.get("PENPOT_ACCESS_TOKEN", "eyJhbGciOiJBMjU2S1ciLCJlbmMiOiJBMjU2R0NNIn0.FF-bTHscKhQJJrvlltcdNE43jWYqOBjfRKg7B-1ChneXQpbHi1ykXA.27_ksTQTQGpX3wSg.0_7FWcDJo_67EHzZS3HOjfQ22NF93MCtF4TKl-Svs9uymIybkBxNVQbX_HkhJi45iE5F28gp06-qxPJxeA443rszyEsntTrqvNbJa2wRTbK0Y7MsMjx7Fsw3eLptbVhmvPOcAhVfyzzNHDPretU_RA2bgnnjmSQl0q0xeXIaS2k7k9NpU7iLcGvSb-MF8irL2u4HdheTCK0U.JlR0VizypVX49vmzrZGl8A")
 PENPOT_FILE_ID = os.environ.get("PENPOT_FILE_ID", "")
 PENPOT_PROJECT_NAME = os.environ.get("PENPOT_PROJECT_NAME", "GX1 UI Designs")
 PENPOT_FILE_NAME = os.environ.get("PENPOT_FILE_NAME", "Generated UIs")

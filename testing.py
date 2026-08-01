@@ -40,7 +40,7 @@ import uuid
 import requests
 
 PENPOT_API_URL = os.environ.get("PENPOT_API_URL", "https://design.penpot.app")
-PENPOT_ACCESS_TOKEN = os.environ.get("PENPOT_ACCESS_TOKEN", "")
+PENPOT_ACCESS_TOKEN = os.environ.get("PENPOT_ACCESS_TOKEN", "eyJhbGciOiJBMjU2S1ciLCJlbmMiOiJBMjU2R0NNIn0.FF-bTHscKhQJJrvlltcdNE43jWYqOBjfRKg7B-1ChneXQpbHi1ykXA.27_ksTQTQGpX3wSg.0_7FWcDJo_67EHzZS3HOjfQ22NF93MCtF4TKl-Svs9uymIybkBxNVQbX_HkhJi45iE5F28gp06-qxPJxeA443rszyEsntTrqvNbJa2wRTbK0Y7MsMjx7Fsw3eLptbVhmvPOcAhVfyzzNHDPretU_RA2bgnnjmSQl0q0xeXIaS2k7k9NpU7iLcGvSb-MF8irL2u4HdheTCK0U.JlR0VizypVX49vmzrZGl8A")
 PENPOT_FILE_ID = os.environ.get("PENPOT_FILE_ID", "")
 PENPOT_PROJECT_NAME = os.environ.get("PENPOT_PROJECT_NAME", "API Uploads")
 PENPOT_FILE_NAME = os.environ.get("PENPOT_FILE_NAME", "Uploaded via API")
