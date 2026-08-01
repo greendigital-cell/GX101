@@ -1,0 +1,58 @@
+{
+  "system_name": "GX1 Design System",
+  "logo": {
+    "url": "http://res.cloudinary.com/dtkxm4abz/image/upload/v1784645775/logos/company_logo.png",
+    "placement": "top-right on light surfaces only",
+    "rules": "no recolour, no inversion, no shadow, no watermark, no distortion"
+  },
+  "colors": {
+    "brand_green": "#23B14D",
+    "action_green": "#0F7A35",
+    "brand_yellow": "#FFD500",
+    "gradient_brand": "linear-gradient(90deg, #FFD500, #23B14D)",
+    "surface_canvas": "#F7F8F8",
+    "text_primary": "#182229",
+    "border_resting": "#8F999F",
+    "info": "#2563EB",
+    "ai_violet": "#6D4AFF",
+    "caution": "#D97706",
+    "error": "#C62828"
+  },
+  "color_rules": {
+    "brand_green": "identity, active nav, focus, selected — never large backgrounds",
+    "action_green": "primary button text/fill only",
+    "brand_yellow": "small accents only — never buttons or big surfaces",
+    "gradient_brand": "hero bars/module icons only — never forms, tables, buttons"
+  },
+  "typography": {
+    "font": "Montserrat",
+    "fallback": "Arial, Helvetica",
+    "body_size": "14-16px"
+  },
+  "form_field": {
+    "style": "label always above field, no floating placeholder",
+    "rest_border": "1px solid #8F999F (underline only)",
+    "focus_border": "2px solid #0F7A35 + visible focus ring",
+    "height": { "standard": "40px", "compact": "32px" },
+    "grid": "2-column desktop, 1-column mobile"
+  },
+  "layout": {
+    "content_occupancy": "75-85% of screen (dense, not empty)",
+    "row_height": { "standard": "40px", "compact": "32px" },
+    "table_column_order": ["ID", "descriptor", "status", "context", "dates", "owner", "progress", "actions"]
+  },
+  "icons": {
+    "style": "single line-icon family",
+    "functional": "neutral at rest, green on hover/active",
+    "ai": "violet (#6D4AFF)",
+    "destructive": "red (#C62828)",
+    "no_gradients_on_functional_icons": true
+  },
+  "core_rules": [
+    "One dominant action per screen region",
+    "AI outputs must show source/assumptions/confidence — never presented as fact",
+    "Any destructive or high-impact action needs preview + confirm + undo",
+    "Never remove focus outlines",
+    "No raw hex colors in code — use tokens above"
+  ]
+}
