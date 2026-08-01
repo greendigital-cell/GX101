@@ -55,11 +55,6 @@ class BRDRequest(BaseModel):
     title: str
     description: str
 
-class CustomURLRequest(BaseModel):
-    """Model for custom URL requests"""
-    url: HttpUrl
-    headers: Optional[Dict[str, str]] = None
-
 # ------------------------------
 # LLM Handler
 # ------------------------------
@@ -125,10 +120,42 @@ async def get_html_file(filename: str):
 async def brd(
     title: str = Form(None),
     description: str = Form(None),
-    brd_file: UploadFile = File(None)
+    brd_file: UploadFile = File(None),
+    # Project Selection (From GSolve)
+    project_code: str = Form(None),
+    project_name: str = Form(None),
+    client: str = Form(None),
+    project_manager: str = Form(None),
+    status: str = Form(None),
+    # Project Metadata (Read-only from GSolve)
+    start_date: str = Form(None),
+    target_end_date: str = Form(None),
+    currency: str = Form(None),
+    project_type: str = Form(None),
+    business_domain: str = Form(None),
+    sub_domain: str = Form(None),
+    contract_reference: str = Form(None),
+    budget: str = Form(None),
+    project_priority: str = Form(None),
+    project_stage: str = Form(None),
+    last_updated: str = Form(None),
+    updated_by: str = Form(None),
+    # Priority & Target (Section 6)
+    priority: str = Form(None),
+    target_release_date: str = Form(None),
+    # Classification
+    complexity: str = Form(None),
+    regulatory_impact: str = Form(None),
+    # Assignment
+    assign_to: str = Form(None),
+    reviewers: str = Form(None),  # Comma-separated string
+    # Tags & Notes
+    tags: str = Form(None),  # Comma-separated string
+    notes: str = Form(None)
 ):
     """
     Accept BRD input via title+description OR uploaded document.
+    Also accepts GSolve project metadata fields.
     Generate UI design in HTML based on GX1 design system.
     """
     try:
@@ -175,7 +202,9 @@ async def brd(
             
             brd_title = title
             brd_content = description
+        
         print(brd_content)
+        
         # Step 2: Load GX1 design system
         gx1_design_path = os.path.join(os.path.dirname(__file__), "gx1.json")
         with open(gx1_design_path, 'r') as f:
@@ -195,13 +224,55 @@ async def brd(
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
         
-        # Step 5: Store in MongoDB
+        # Step 5: Store in MongoDB with all GSolve fields
+        # Parse comma-separated fields
+        reviewers_list = [r.strip() for r in reviewers.split(',')] if reviewers else []
+        tags_list = [t.strip() for t in tags.split(',')] if tags else []
+        
         brd_record = {
+            # BRD Document Info
             "title": brd_title,
             "content": brd_content,
             "html_file": file_path,
             "created_at": datetime.now(),
-            "design_system": "GX1"
+            "design_system": "GX1",
+            
+            # Project Selection (From GSolve)
+            "project_code": project_code,
+            "project_name": project_name,
+            "client": client,
+            "project_manager": project_manager,
+            "status": status,
+            
+            # Project Metadata (Read-only from GSolve)
+            "start_date": start_date,
+            "target_end_date": target_end_date,
+            "currency": currency,
+            "project_type": project_type,
+            "business_domain": business_domain,
+            "sub_domain": sub_domain,
+            "contract_reference": contract_reference,
+            "budget": budget,
+            "project_priority": project_priority,
+            "project_stage": project_stage,
+            "last_updated": last_updated,
+            "updated_by": updated_by,
+            
+            # Priority & Target (Section 6 - Auto-filled from GSolve)
+            "priority": priority or project_priority,
+            "target_release_date": target_release_date or target_end_date,
+            
+            # Classification
+            "complexity": complexity,
+            "regulatory_impact": regulatory_impact,
+            
+            # Assignment
+            "assign_to": assign_to,
+            "reviewers": reviewers_list,
+            
+            # Tags & Notes
+            "tags": tags_list,
+            "notes": notes
         }
         
         result = await nlp_collection.insert_one(brd_record)
@@ -210,10 +281,15 @@ async def brd(
             "message": "UI design generated successfully",
             "data_id": str(result.inserted_id),
             "html_file": filename,
-            "file_path": file_path
+            "file_path": file_path,
+            "project_code": project_code,
+            "project_name": project_name
         }
     
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error processing BRD: {error_details}")
         raise HTTPException(status_code=500, detail=f"Error processing BRD: {str(e)}")
 
 
@@ -640,103 +716,6 @@ async def get_project_list():
                 "timestamp": datetime.now(),
                 "status_code": response.status_code,
                 "message": "Project list fetched successfully"
-            }
-    
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"HTTP error occurred: {e.response.text}"
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Request error occurred: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error: {str(e)}"
-        )
-
-
-@router.post("/gsolve/fetch-url")
-async def fetch_custom_url(request: CustomURLRequest):
-    """
-    Fetch data from any custom URL with optional headers
-    
-    Args:
-        request: CustomURLRequest containing URL and optional headers
-    
-    Returns:
-        JSON response from the provided URL
-    """
-    try:
-        # Default headers
-        headers = {
-            "Content-Type": "application/json"
-        }
-        
-        # Override with custom headers if provided
-        if request.headers:
-            headers.update(request.headers)
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(str(request.url), headers=headers)
-            response.raise_for_status()
-            
-            return {
-                "data": response.json(),
-                "timestamp": datetime.now(),
-                "status_code": response.status_code,
-                "url": str(request.url),
-                "message": "Data fetched successfully"
-            }
-    
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(
-            status_code=e.response.status_code,
-            detail=f"HTTP error occurred: {e.response.text}"
-        )
-    except httpx.RequestError as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Request error occurred: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error: {str(e)}"
-        )
-
-
-@router.get("/gsolve/project/{project_id}")
-async def get_project_detail(project_id: str):
-    """
-    Fetch specific project details from GreenSolve API
-    
-    Args:
-        project_id: The project identifier
-    
-    Returns:
-        Project detail data
-    """
-    try:
-        url = f"https://app-gsolve.green.com.pg/project/{project_id}"
-        
-        headers = {
-            "Content-Type": "application/json"
-        }
-        
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url, headers=headers)
-            response.raise_for_status()
-            
-            return {
-                "data": response.json(),
-                "timestamp": datetime.now(),
-                "status_code": response.status_code,
-                "project_id": project_id,
-                "message": "Project detail fetched successfully"
             }
     
     except httpx.HTTPStatusError as e:
