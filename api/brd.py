@@ -12,11 +12,6 @@ import certifi
 import io
 import tempfile
 import json
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import geopandas as gpd
-import contextily as ctx
 import cloudinary
 import cloudinary.uploader
 from dotenv import load_dotenv
