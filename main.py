@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.brd import router as project_sites_router
 from api.auth import router as auth_router
 from api.penpot import router as penpot_router
+from api.normalize import router as normalize_router
 
 app = FastAPI()
 
@@ -18,6 +19,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
 app.include_router(project_sites_router, prefix="/api/project-sites", tags=["project-sites"])
 app.include_router(penpot_router, prefix="/api/project-sites", tags=["penpot"])
+app.include_router(normalize_router, prefix="/api/normalize", tags=["normalize"])
 
 @app.get("/")
 async def root():

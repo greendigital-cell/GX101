@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Challenge</title>
+    <style>
+        body {
+            font-family: 'Montserrat', Arial, Helvetica;
+            background-color: #F7F8F8; /* surface_canvas */
+            color: #182229; /* text_primary */
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            padding: 20px 60px 40px 60px;
+            max-width: 1200px;
+            margin: auto;
+        }
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 60px;
+            max-width: 180px;
+            z-index: 1000;
+        }
+        .form-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px 30px;
+            margin-bottom: 30px;
+        }
+        .form-field {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, select {
+            width: 100%;
+            height: 40px; /* standard height */
+            border: 1px solid #8F999F; /* border_resting */
+            outline: none;
+            padding: 5px;
+        }
+        input:focus, select:focus {
+            border: 2px solid #0F7A35; /* focus_border */
+            box-shadow: 0 0 0 3px rgba(15, 122, 53, 0.3); /* action_green focus ring */
+        }
+        button {
+            background-color: #0F7A35; /* action_green */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .responsive {
+            display: grid;
+            grid-template-columns: 1fr;
+        }
+        @media (min-width: 769px) {
+            .responsive {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <img class="logo" src="http://res.cloudinary.com/dtkxm4abz/image/upload/v1784645775/logos/company_logo.png" alt="Company Logo">
+    
+    <div class="container">
+        <h1>Python Challenge</h1>
+        
+        <div class="card">
+            <h2>Exercise 1: Create Your Gamer Profile</h2>
+            <div class="form-section responsive">
+                <div class="form-field">
+                    <label for="gamer-name">Gamer Name</label>
+                    <input type="text" id="gamer-name" placeholder="Enter your gamer name">
+                </div>
+                <div class="form-field">
+                    <label for="gamer-age">Age</label>
+                    <input type="number" id="gamer-age" placeholder="Enter your age">
+                </div>
+                <div class="form-field">
+                    <label for="favorite-game">Favorite Game</label>
+                    <input type="text" id="favorite-game" placeholder="Enter your favorite game">
+                </div>
+                <div class="form-field">
+                    <label for="country">Country</label>
+                    <input type="text" id="country" placeholder="Enter your country">
+                </div>
+            </div>
+            <button>Submit Gamer Profile</button>
+        </div>
+
+        <div class="card">
+            <h2>Exercise 2: Superhero Identity Card</h2>
+            <div class="form-section responsive">
+                <div class="form-field">
+                    <label for="hero-name">Hero Name</label>
+                    <input type="text" id="hero-name" placeholder="Enter hero name">
+                </div>
+                <div class="form-field">
+                    <label for="super-power">Super Power</label>
+                    <input type="text" id="super-power" placeholder="Enter super power">
+                </div>
+                <div class="form-field">
+                    <label for="hero-age">Hero Age</label>
+                    <input type="number" id="hero-age" placeholder="Enter hero age">
+                </div>
+                <div class="form-field">
+                    <label for="city">City</label>
+                    <input type="text" id="city" placeholder="Enter city">
+                </div>
+            </div>
+            <button>Submit Hero Card</button>
+        </div>
+
+        <div class="card">
+            <h2>Exercise 3: Robot Introduction</h2>
+            <div class="form-section responsive">
+                <div class="form-field">
+                    <label for="robot-name">Robot Name</label>
+                    <input type="text" id="robot-name" placeholder="Enter robot name">
+                </div>
+                <div class="form-field">
+                    <label for="robot-color">Color</label>
+                    <input type="text" id="robot-color" placeholder="Enter robot color">
+                </div>
+                <div class="form-field">
+                    <label for="robot-speed">Speed</label>
+                    <input type="number" id="robot-speed" placeholder="Enter robot speed">
+                </div>
+                <div class="form-field">
+                    <label for="robot-job">Job</label>
+                    <input type="text" id="robot-job" placeholder="Enter robot job">
+                </div>
+            </div>
+            <button>Submit Robot Introduction</button>
+        </div>
+        
+        <!-- Additional exercises can be added here following the same structure -->
+        
+    </div>
+</body>
+</html>
