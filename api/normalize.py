@@ -16,6 +16,7 @@ MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://zainisrar2007_db_user:SUcR
 async_client = AsyncIOMotorClient(MONGODB_URL, tlsCAFile=certifi.where()) if MONGODB_URL.startswith("mongodb+srv") else AsyncIOMotorClient(MONGODB_URL)
 db = async_client.gx1
 brd_normalize_collection = db.brd_normalize
+normalized_requirements_collection = db.normalized_requirements
 
 router = APIRouter()
 
@@ -36,6 +37,44 @@ class BRDRequestByProjectId(BaseModel):
     brd_title: str
     clauses: List[BRDClause]
     project_id: int  # GSolve project ID (primary identifier)
+
+class NormalizedRequirement(BaseModel):
+    # Auto-generated field
+    requirement_id: Optional[str] = None  # e.g., "NRM-REQ-014" (auto-generated if not provided)
+    
+    # Basic Information
+    requirement_title: str  # e.g., "Task Creation with Owner, Priority and Due Date"
+    normalised_requirement_statement: str  # The normalized statement
+    
+    # Flags
+    is_traceable: bool = False
+    is_testable: bool = False
+    needs_clarification: bool = False
+    
+    # Classification
+    requirement_type: str  # e.g., "Functional", "Non-Functional", "Security"
+    functional_module: str  # e.g., "Task Management"
+    actor_user_role: str  # e.g., "Task Manager"
+    
+    # Details
+    priority: str  # e.g., "High", "Medium", "Low"
+    business_rule: Optional[str] = None
+    acceptance_criteria: str
+    
+    # Relationships
+    dependencies: Optional[str] = None  # e.g., "User Management, Calendar Service"
+    owner: str  # e.g., "Rohit Sharma (BA)"
+    status: str  # e.g., "In Review", "Draft", "Ready"
+    
+    # Traceability to Source BRD
+    source_section: Optional[str] = None  # e.g., "3.2 Task Management"
+    source_page: Optional[int] = None  # e.g., 12
+    source_clause: Optional[str] = None  # e.g., "BRD-S3.2.1"
+    source_confidence: Optional[str] = None  # e.g., "92%"
+    
+    # Linking to original BRD
+    brd_id: Optional[str] = None  # Reference to original BRD document
+    project_id: Optional[int] = None  # GSolve project ID
 
 class ClauseUpdate(BaseModel):
     status: str  # New status to update
@@ -674,6 +713,189 @@ async def delete_brd(brd_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting BRD: {str(e)}")
+
+
+# ------------------------------
+# Normalized Requirements APIs
+# ------------------------------
+
+@router.post("/add-normalized-requirement")
+async def add_normalized_requirement(requirement: NormalizedRequirement):
+    """
+    Add a normalized requirement to the database.
+    
+    Request body example:
+    {
+        "requirement_title": "Task Creation with Owner, Priority and Due Date",
+        "normalised_requirement_statement": "The system shall allow authorized users to create tasks by specifying the owner, priority level and due date.",
+        "is_traceable": true,
+        "is_testable": true,
+        "needs_clarification": false,
+        "requirement_type": "Functional",
+        "functional_module": "Task Management",
+        "actor_user_role": "Task Manager",
+        "priority": "High",
+        "business_rule": "Task must be assigned to a valid user and due date cannot be in the past.",
+        "acceptance_criteria": "Given a user with create permission, when task details are entered, then the task shall be created successfully.",
+        "dependencies": "User Management, Calendar Service",
+        "owner": "Rohit Sharma (BA)",
+        "status": "In Review",
+        "source_section": "3.2 Task Management",
+        "source_page": 12,
+        "source_clause": "BRD-S3.2.1",
+        "source_confidence": "92%",
+        "brd_id": "6a70c844f7bc4b4a7c24c166",
+        "project_id": 1
+    }
+    """
+    try:
+        # Auto-generate requirement ID if not provided
+        if not requirement.requirement_id:
+            # Get count of existing requirements to generate sequential ID
+            count = await normalized_requirements_collection.count_documents({})
+            requirement.requirement_id = f"NRM-REQ-{str(count + 1).zfill(3)}"
+        
+        # Prepare document for MongoDB
+        requirement_document = {
+            "requirement_id": requirement.requirement_id,
+            "requirement_title": requirement.requirement_title,
+            "normalised_requirement_statement": requirement.normalised_requirement_statement,
+            
+            # Flags
+            "is_traceable": requirement.is_traceable,
+            "is_testable": requirement.is_testable,
+            "needs_clarification": requirement.needs_clarification,
+            
+            # Classification
+            "requirement_type": requirement.requirement_type,
+            "functional_module": requirement.functional_module,
+            "actor_user_role": requirement.actor_user_role,
+            
+            # Details
+            "priority": requirement.priority,
+            "business_rule": requirement.business_rule,
+            "acceptance_criteria": requirement.acceptance_criteria,
+            
+            # Relationships
+            "dependencies": requirement.dependencies,
+            "owner": requirement.owner,
+            "status": requirement.status,
+            
+            # Traceability
+            "source_section": requirement.source_section,
+            "source_page": requirement.source_page,
+            "source_clause": requirement.source_clause,
+            "source_confidence": requirement.source_confidence,
+            
+            # Linking
+            "brd_id": requirement.brd_id,
+            "project_id": requirement.project_id,
+            
+            # Timestamps
+            "created_at": datetime.now(),
+            "updated_at": datetime.now()
+        }
+        
+        # Insert into MongoDB
+        result = await normalized_requirements_collection.insert_one(requirement_document)
+        
+        return {
+            "message": "Normalized requirement added successfully",
+            "requirement_id": requirement.requirement_id,
+            "requirement_db_id": str(result.inserted_id),
+            "requirement_title": requirement.requirement_title
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error adding normalized requirement: {str(e)}")
+
+
+@router.get("/get-normalized-requirements-by-project/{project_id}")
+async def get_normalized_requirements_by_project(
+    project_id: int,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Number of records to return")
+):
+    """
+    Get all normalized requirements for a specific project ID.
+    
+    Example: GET /api/normalize/get-normalized-requirements-by-project/1
+    """
+    try:
+        # Query for requirements matching this project (handle both int and string IDs)
+        query = {"$or": [{"project_id": project_id}, {"project_id": str(project_id)}]}
+        
+        # Count total requirements
+        total = await normalized_requirements_collection.count_documents(query)
+        
+        if total == 0:
+            return {
+                "message": f"No normalized requirements found for project ID {project_id}",
+                "project_id": project_id,
+                "total": 0,
+                "requirements": []
+            }
+        
+        # Fetch requirements with pagination
+        cursor = normalized_requirements_collection.find(query).skip(skip).limit(limit).sort("created_at", -1)
+        requirements = await cursor.to_list(length=limit)
+        
+        # Convert ObjectId to string
+        for req in requirements:
+            req["id"] = str(req.pop("_id"))
+        
+        # Group by status
+        status_counts = {
+            "Draft": 0,
+            "In Review": 0,
+            "Ready": 0,
+            "Approved": 0
+        }
+        
+        # Group by requirement type
+        type_counts = {
+            "Functional": 0,
+            "Non-Functional": 0,
+            "Security": 0,
+            "Performance": 0
+        }
+        
+        # Group by priority
+        priority_counts = {
+            "High": 0,
+            "Medium": 0,
+            "Low": 0
+        }
+        
+        for req in requirements:
+            status = req.get("status", "")
+            if status in status_counts:
+                status_counts[status] += 1
+            
+            req_type = req.get("requirement_type", "")
+            if req_type in type_counts:
+                type_counts[req_type] += 1
+            
+            priority = req.get("priority", "")
+            if priority in priority_counts:
+                priority_counts[priority] += 1
+        
+        return {
+            "message": "Normalized requirements fetched successfully",
+            "project_id": project_id,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "summary": {
+                "status_counts": status_counts,
+                "type_counts": type_counts,
+                "priority_counts": priority_counts
+            },
+            "requirements": requirements
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching normalized requirements: {str(e)}")
 
 
 @router.get("/get-clause/{brd_id}/{source_ref}")

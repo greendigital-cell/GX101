@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Registration</title>
+    <style>
+        /* GX1 Design System - Typography */
+        body {
+            font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+            background-color: #F7F8F8; /* surface_canvas */
+            color: #182229; /* text_primary */
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Logo */
+        .logo {
+            position: fixed;
+            top: 20px;
+            right: 60px;
+            max-width: 180px;
+            z-index: 1000;
+        }
+
+        /* Main Container */
+        .container {
+            padding: 20px 60px 40px 60px;
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        /* Section Spacing */
+        .section {
+            margin-bottom: 30px;
+        }
+
+        /* Form Styles */
+        .form-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="date"],
+        select,
+        textarea {
+            width: 100%;
+            height: 40px; /* form_field height standard */
+            border: 1px solid #8F999F; /* border_resting */
+            padding: 8px;
+            box-sizing: border-box;
+            font-size: 14px; /* typography body_size */
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="date"]:focus,
+        select:focus,
+        textarea:focus {
+            border: 2px solid #0F7A35; /* focus_border */
+            outline: none;
+        }
+
+        textarea {
+            height: 80px;
+        }
+
+        /* Button Styles */
+        button {
+            background-color: #0F7A35; /* action_green */
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+
+        button:hover {
+            background-color: #23B14D; /* brand_green */
+        }
+
+        /* Responsive Layout */
+        @media (max-width: 768px) {
+            .form-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <img src="http://res.cloudinary.com/dtkxm4abz/image/upload/v1784645775/logos/company_logo.png" alt="Company Logo" class="logo">
+
+    <div class="container">
+        <h1>Employee Registration</h1>
+
+        <form class="form-container">
+            <div class="form-group">
+                <label for="employee-id">Employee ID</label>
+                <input type="text" id="employee-id" value="EMP0001" readonly>
+            </div>
+            <div class="form-group">
+                <label for="first-name">First Name</label>
+                <input type="text" id="first-name" placeholder="John" required>
+            </div>
+            <div class="form-group">
+                <label for="last-name">Last Name</label>
+                <input type="text" id="last-name" placeholder="Doe" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" placeholder="john.doe@company.com" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="text" id="phone" placeholder="+92-3001234567" required>
+            </div>
+            <div class="form-group">
+                <label for="dob">Date of Birth</label>
+                <input type="date" id="dob" required>
+            </div>
+            <div class="form-group">
+                <label for="gender">Gender</label>
+                <select id="gender" required>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="department">Department</label>
+                <select id="department" required>
+                    <option value="it">IT</option>
+                    <option value="hr">HR</option>
+                    <option value="finance">Finance</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="designation">Designation</label>
+                <select id="designation" required>
+                    <option value="software-engineer">Software Engineer</option>
+                    <option value="project-manager">Project Manager</option>
+                    <option value="designer">Designer</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="joining-date">Joining Date</label>
+                <input type="date" id="joining-date" required>
+            </div>
+            <div class="form-group">
+                <label for="employment-type">Employment Type</label>
+                <select id="employment-type" required>
+                    <option value="full-time">Full-Time</option>
+                    <option value="part-time">Part-Time</option>
+                    <option value="contract">Contract</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="manager">Manager</label>
+                <select id="manager">
+                    <option value="jane-smith">Jane Smith</option>
+                    <option value="john-doe">John Doe</option>
+                    <option value="anna-jones">Anna Jones</option>
+                </select>
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+                <label for="address">Address</label>
+                <textarea id="address" placeholder="Islamabad, Pakistan"></textarea>
+            </div>
+            <button type="submit">Register Employee</button>
+        </form>
+    </div>
+</body>
+</html>

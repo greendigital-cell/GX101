@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Query, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, HttpUrl
 from pathlib import Path
@@ -118,6 +118,7 @@ async def get_html_file(filename: str):
 
 @router.post("/BRD")
 async def brd(
+    background_tasks: BackgroundTasks,
     title: str = Form(None),
     description: str = Form(None),
     brd_file: UploadFile = File(None),
@@ -155,8 +156,8 @@ async def brd(
 ):
     """
     Accept BRD input via title+description OR uploaded document.
-    Also accepts GSolve project metadata fields.
-    Generate UI design in HTML based on GX1 design system.
+    Processes BRD generation in background and returns immediately.
+    User can check status using the returned data_id.
     """
     try:
         # Step 1: Get BRD content
@@ -170,7 +171,6 @@ async def brd(
             if brd_file.filename.endswith('.txt'):
                 brd_content = file_content.decode('utf-8')
             elif brd_file.filename.endswith('.docx'):
-                # For DOCX files, you'd need python-docx library
                 try:
                     import docx
                     doc_file = io.BytesIO(file_content)
@@ -179,7 +179,6 @@ async def brd(
                 except ImportError:
                     raise HTTPException(status_code=400, detail="DOCX support requires python-docx library")
             elif brd_file.filename.endswith('.pdf'):
-                # For PDF files, use PyPDF2
                 try:
                     import PyPDF2
                     pdf_file = io.BytesIO(file_content)
@@ -203,29 +202,7 @@ async def brd(
             brd_title = title
             brd_content = description
         
-        print(brd_content)
-        
-        # Step 2: Load GX1 design system
-        gx1_design_path = os.path.join(os.path.dirname(__file__), "gx1.json")
-        with open(gx1_design_path, 'r') as f:
-            gx1_design = json.load(f)
-        
-        # Step 3: Generate UI design using AI
-        html_content = generate_ui_from_brd(brd_title, brd_content, gx1_design)
-        
-        # Step 4: Save HTML file
-        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "generated_ui")
-        os.makedirs(output_dir, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{brd_title.replace(' ', '_')}_{timestamp}.html"
-        file_path = os.path.join(output_dir, filename)
-        
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        # Step 5: Store in MongoDB with all GSolve fields
-        # Parse comma-separated fields
+        # Step 2: Store BRD in MongoDB immediately with "pending" status
         reviewers_list = [r.strip() for r in reviewers.split(',')] if reviewers else []
         tags_list = [t.strip() for t in tags.split(',')] if tags else []
         
@@ -233,9 +210,12 @@ async def brd(
             # BRD Document Info
             "title": brd_title,
             "content": brd_content,
-            "html_file": file_path,
+            "html_file": None,  # Will be updated by background task
+            "html_filename": None,
             "created_at": datetime.now(),
+            "updated_at": datetime.now(),
             "design_system": "GX1",
+            "processing_status": "pending",  # Track processing status
             
             # Project Selection (From GSolve)
             "project_code": project_code,
@@ -258,7 +238,7 @@ async def brd(
             "last_updated": last_updated,
             "updated_by": updated_by,
             
-            # Priority & Target (Section 6 - Auto-filled from GSolve)
+            # Priority & Target
             "priority": priority or project_priority,
             "target_release_date": target_release_date or target_end_date,
             
@@ -276,21 +256,151 @@ async def brd(
         }
         
         result = await nlp_collection.insert_one(brd_record)
+        brd_id = str(result.inserted_id)
         
+        # Step 3: Add background task to process BRD
+        gx1_design_path = os.path.join(os.path.dirname(__file__), "gx1.json")
+        background_tasks.add_task(
+            process_brd_background,
+            brd_id,
+            brd_title,
+            brd_content,
+            gx1_design_path
+        )
+        
+        # Step 4: Return immediately
         return {
-            "message": "UI design generated successfully",
-            "data_id": str(result.inserted_id),
-            "html_file": filename,
-            "file_path": file_path,
+            "message": "BRD submitted successfully. Processing in background.",
+            "data_id": brd_id,
+            "processing_status": "pending",
+            "status_check_url": f"/api/project-sites/BRD/{brd_id}",
             "project_code": project_code,
-            "project_name": project_name
+            "project_name": project_name,
+            "note": "Use the data_id to check processing status via GET /api/project-sites/BRD/{data_id}"
         }
     
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"Error processing BRD: {error_details}")
-        raise HTTPException(status_code=500, detail=f"Error processing BRD: {str(e)}")
+        print(f"Error submitting BRD: {error_details}")
+        raise HTTPException(status_code=500, detail=f"Error submitting BRD: {str(e)}")
+
+
+@router.get("/BRD/{brd_id}")
+async def get_brd_by_id(brd_id: str):
+    """
+    Get BRD data by ID from userdata collection.
+    This returns the BRD document with all project details and generated UI information.
+    
+    Example: GET /api/project-sites/BRD/6a70c844f7bc4b4a7c24c166
+    """
+    try:
+        # Convert string ID to ObjectId
+        try:
+            obj_id = ObjectId(brd_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid BRD ID format")
+        
+        # Fetch BRD from userdata collection
+        brd_data = await nlp_collection.find_one({"_id": obj_id})
+        
+        if not brd_data:
+            raise HTTPException(status_code=404, detail="BRD not found")
+        
+        # Convert ObjectId to string
+        brd_data["id"] = str(brd_data.pop("_id"))
+        
+        return {
+            "message": "BRD fetched successfully",
+            "data": brd_data
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching BRD: {str(e)}")
+
+
+@router.get("/BRD/list/all")
+async def get_all_brds(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of records to return")
+):
+    """
+    Get all BRD records from userdata collection with pagination.
+    
+    Example: GET /api/project-sites/BRD/list/all?skip=0&limit=10
+    """
+    try:
+        # Count total documents
+        total = await nlp_collection.count_documents({})
+        
+        # Fetch documents with pagination
+        cursor = nlp_collection.find({}).skip(skip).limit(limit).sort("created_at", -1)
+        brds = await cursor.to_list(length=limit)
+        
+        # Convert ObjectId to string
+        for brd in brds:
+            brd["id"] = str(brd.pop("_id"))
+        
+        return {
+            "message": "BRDs fetched successfully",
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "data": brds
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching BRDs: {str(e)}")
+
+
+@router.get("/BRD/by-project/{project_code}")
+async def get_brds_by_project_code(
+    project_code: str,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Number of records to return")
+):
+    """
+    Get all BRD records for a specific project code from userdata collection.
+    
+    Example: GET /api/project-sites/BRD/by-project/GSolve?skip=0&limit=10
+    """
+    try:
+        # Query for this project
+        query = {"project_code": project_code}
+        
+        # Count total documents for this project
+        total = await nlp_collection.count_documents(query)
+        
+        if total == 0:
+            return {
+                "message": f"No BRDs found for project code {project_code}",
+                "total": 0,
+                "skip": skip,
+                "limit": limit,
+                "data": []
+            }
+        
+        # Fetch documents with pagination
+        cursor = nlp_collection.find(query).skip(skip).limit(limit).sort("created_at", -1)
+        brds = await cursor.to_list(length=limit)
+        
+        # Convert ObjectId to string
+        for brd in brds:
+            brd["id"] = str(brd.pop("_id"))
+        
+        return {
+            "message": "BRDs fetched successfully",
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "project_code": project_code,
+            "data": brds
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching BRDs: {str(e)}")
 
 
 def generate_ui_from_brd(title: str, brd_content: str, gx1_design: dict) -> str:
@@ -374,6 +484,239 @@ Generate ONLY the HTML code, no explanations.
 
 
 def generate_fallback_html(title: str, content: str, gx1: dict) -> str:
+    """
+    Generate a basic fallback HTML if AI fails
+    """
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{title} - GX1</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+            font-size: 16px;
+            color: {gx1['colors']['text_primary']}; /* text_primary */
+            background-color: {gx1['colors']['surface_canvas']}; /* surface_canvas */
+            line-height: 1.6;
+        }}
+        
+        .container {{
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px 60px 40px 60px;
+            width: 85%; /* 75-85% content occupancy */
+        }}
+        
+        .header {{
+            position: relative;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid {gx1['colors']['brand_green']}; /* brand_green */
+        }}
+        
+        .logo {{
+            position: absolute;
+            top: 0;
+            right: 0;
+            max-width: 180px;
+            height: auto;
+        }}
+        
+        h1 {{
+            font-size: 32px;
+            font-weight: 700;
+            color: {gx1['colors']['text_primary']}; /* text_primary */
+            margin-bottom: 20px;
+        }}
+        
+        .content-section {{
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        
+        .form-field {{
+            margin-bottom: 24px;
+        }}
+        
+        .form-field label {{
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            color: {gx1['colors']['text_primary']}; /* text_primary */
+        }}
+        
+        .form-field input,
+        .form-field textarea {{
+            width: 100%;
+            height: 40px; /* standard height */
+            padding: 8px 12px;
+            font-family: 'Montserrat', Arial, sans-serif;
+            font-size: 14px;
+            border: none;
+            border-bottom: 1px solid {gx1['colors']['border_resting']}; /* border_resting */
+            background: transparent;
+            transition: border 0.2s;
+        }}
+        
+        .form-field textarea {{
+            height: 120px;
+            resize: vertical;
+        }}
+        
+        .form-field input:focus,
+        .form-field textarea:focus {{
+            outline: none;
+            border-bottom: 2px solid {gx1['colors']['action_green']}; /* action_green */
+            box-shadow: 0 2px 0 0 {gx1['colors']['action_green']}; /* focus ring */
+        }}
+        
+        .btn-primary {{
+            background-color: {gx1['colors']['action_green']}; /* action_green */
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            font-family: 'Montserrat', Arial, sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }}
+        
+        .btn-primary:hover {{
+            background-color: {gx1['colors']['brand_green']}; /* brand_green */
+        }}
+        
+        .btn-primary:focus {{
+            outline: 2px solid {gx1['colors']['brand_green']}; /* focus outline */
+            outline-offset: 2px;
+        }}
+        
+        @media (max-width: 768px) {{
+            .container {{
+                padding: 20px;
+                width: 95%;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="{gx1['logo']['url']}" alt="GX1 Logo" class="logo">
+        <div class="header">
+            <h1>{title}</h1>
+        </div>
+        
+        <div class="content-section">
+            <h2>Requirements</h2>
+            <p>{content}</p>
+        </div>
+        
+        <div class="content-section">
+            <h2>Generated Form</h2>
+            <form>
+                <div class="form-field">
+                    <label for="name">Name</label>
+                    <input type="text" id="name" name="name">
+                </div>
+                
+                <div class="form-field">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email">
+                </div>
+                
+                <div class="form-field">
+                    <label for="notes">Additional Notes</label>
+                    <textarea id="notes" name="notes"></textarea>
+                </div>
+                
+                <button type="submit" class="btn-primary">Submit</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+async def process_brd_background(
+    brd_id: str,
+    brd_title: str,
+    brd_content: str,
+    gx1_design_path: str
+):
+    """
+    Background task to process BRD and generate UI design.
+    Updates the BRD record with processing status and results.
+    """
+    try:
+        # Update status to processing
+        await nlp_collection.update_one(
+            {"_id": ObjectId(brd_id)},
+            {"$set": {"processing_status": "processing", "updated_at": datetime.now()}}
+        )
+        
+        # Load GX1 design system
+        with open(gx1_design_path, 'r') as f:
+            gx1_design = json.load(f)
+        
+        # Generate UI design using AI
+        html_content = generate_ui_from_brd(brd_title, brd_content, gx1_design)
+        
+        # Save HTML file
+        output_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "generated_ui")
+        os.makedirs(output_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{brd_title.replace(' ', '_')}_{timestamp}.html"
+        file_path = os.path.join(output_dir, filename)
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        # Update BRD record with success status
+        await nlp_collection.update_one(
+            {"_id": ObjectId(brd_id)},
+            {
+                "$set": {
+                    "html_file": file_path,
+                    "html_filename": filename,
+                    "processing_status": "completed",
+                    "updated_at": datetime.now()
+                }
+            }
+        )
+        
+        print(f"BRD processing completed for ID: {brd_id}")
+        
+    except Exception as e:
+        # Update BRD record with error status
+        await nlp_collection.update_one(
+            {"_id": ObjectId(brd_id)},
+            {
+                "$set": {
+                    "processing_status": "failed",
+                    "processing_error": str(e),
+                    "updated_at": datetime.now()
+                }
+            }
+        )
+        print(f"BRD processing failed for ID: {brd_id}, Error: {str(e)}")
+
+
+def generate_fallback_html_old(title: str, content: str, gx1: dict) -> str:
     """
     Generate a basic fallback HTML if AI fails
     """
