@@ -71,6 +71,12 @@ def verify_openai_connection():
         return True
     except Exception as e:
         print(f"✗ OpenAI API connection failed: {type(e).__name__} - {str(e)}")
+        print(f"  This may be due to:")
+        print(f"  - Container network restrictions")
+        print(f"  - Firewall blocking api.openai.com")
+        print(f"  - Invalid or expired API key")
+        print(f"  - No internet access from container")
+        print(f"\n  Run 'python test_network.py' for detailed diagnostics")
         return False
 
 # Test connection on module load (will log result but not block startup)
