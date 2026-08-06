@@ -14,7 +14,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # MongoDB Configuration
-MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://zainisrar2007_db_user:SUcRZUeK6sRJA3KL@cluster0.earf4sd.mongodb.net/?retryWrites=true&w=majority")
+MONGODB_URL = "mongodb+srv://zainisrar_db_user:zain123@cluster0.myxypuf.mongodb.net/gx1"
+if not MONGODB_URL:
+    raise ValueError("MONGODB_URL environment variable is not set. Please add it to your .env file")
 client = AsyncIOMotorClient(MONGODB_URL, tlsCAFile=certifi.where()) if MONGODB_URL.startswith("mongodb+srv") else AsyncIOMotorClient(MONGODB_URL)
 db = client.gx1
 users_collection = db.users
@@ -40,6 +42,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     name: str
+    user_id: str
 
 class User(BaseModel):
     id: str
@@ -143,7 +146,7 @@ async def register(user_data: UserRegister):
     }
     
     result = await users_collection.insert_one(user_doc)
-    
+    print("Connected DB:", MONGODB_URL.split("@")[-1], "| db name:", db.name)
     return {
         "message": "User registered successfully",
         "user_id": str(result.inserted_id),
@@ -172,7 +175,8 @@ async def login(user_data: UserLogin):
         return {
             "access_token": access_token, 
             "token_type": "bearer",
-            "name": user["name"]
+            "name": user["name"],
+            "user_id": str(user["_id"])
         }
     except HTTPException:
         raise
