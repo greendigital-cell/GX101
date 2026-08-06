@@ -25,7 +25,7 @@ layout_cache_collection = db.layout_recommendations
 router = APIRouter()
 
 # OpenAI Client
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "").strip())
 
 
 # Pydantic Models

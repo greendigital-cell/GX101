@@ -30,7 +30,7 @@ cloudinary.config(
 )
 
 # OpenAI Configuration
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", "").strip())
 
 # Penpot Configuration
 PENPOT_API_URL = os.environ.get("PENPOT_API_URL", "https://design.penpot.app")

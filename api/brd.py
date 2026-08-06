@@ -52,7 +52,7 @@ http_client = httpx.Client(
 )
 
 clients = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
+    api_key=os.getenv("OPENAI_API_KEY", "").strip(),  # Strip whitespace and newlines
     http_client=http_client,
     max_retries=3
 )
