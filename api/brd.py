@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 from openai import OpenAI
 import httpx
+import httpx
 import PyPDF2
 import re
 import jwt
@@ -44,7 +45,39 @@ ALGORITHM = "HS256"
 router = APIRouter()
 security = HTTPBearer()
 
-clients = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Configure OpenAI client with custom timeout and retry settings
+http_client = httpx.Client(
+    timeout=httpx.Timeout(60.0, connect=10.0),  # 60s total, 10s connect
+    limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+)
+
+clients = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    http_client=http_client,
+    max_retries=3
+)
+
+# Verify OpenAI API connectivity on startup
+def verify_openai_connection():
+    """Test OpenAI API connectivity"""
+    try:
+        test_response = clients.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=5,
+            timeout=10.0
+        )
+        print("✓ OpenAI API connection verified successfully")
+        return True
+    except Exception as e:
+        print(f"✗ OpenAI API connection failed: {type(e).__name__} - {str(e)}")
+        return False
+
+# Test connection on module load (will log result but not block startup)
+try:
+    verify_openai_connection()
+except:
+    pass
 
 cloudinary.config(
     cloud_name="dtkxm4abz",
@@ -168,44 +201,88 @@ async def extract_clauses_with_llm(chunk_text: str, start_page: int, end_page: i
     Returns:
         List of extracted clauses with metadata
     """
-    prompt = f"""Analyze the following Business Requirements Document (BRD) text from pages {start_page}-{end_page} and extract all requirement clauses.
+    
+    # Check chunk size - warn if too large
+    chunk_length = len(chunk_text)
+    if chunk_length > 15000:
+        print(f"Warning: Chunk {chunk_number} is large ({chunk_length} chars). This may cause timeouts.")
+    
+    prompt = f"""Analyze the following Business Requirements Document (BRD) text from pages {start_page}-{end_page} and extract ALL requirement clauses.
 
-For each requirement clause you find:
-1. Create a unique clause_id in format "BRD-S{{section}}.{{subsection}}.{{number}}" (e.g., BRD-S3.2.1)
-2. Extract the full requirement text
-3. Identify which page number it appears on (between {start_page} and {end_page})
+**IMPORTANT:** Requirements can appear in various formats:
+1. **Narrative format**: "The system shall..." statements embedded in paragraphs
+2. **Tabular format**: Requirements in tables with IDs like FR-01, FR-02, NFR-01, etc.
+3. **Numbered lists**: Requirements as numbered or bulleted items
+4. **Mixed format**: Any combination of the above
 
-Return ONLY a JSON array of clauses in this exact format:
+**What to extract:**
+- Functional Requirements (FR-XX, F.X, etc.)
+- Non-Functional Requirements (NFR-XX, NF.X, etc.)
+- Business Rules
+- Data Requirements and validations
+- Any statement describing system behavior, constraints, or expectations
+- Requirements with 100+ words of meaningful content
+
+**Instructions:**
+For each requirement you find:
+1. **clause_id**: Use the existing ID from the document (e.g., "FR-01", "NFR-03") if available. If no ID exists, create one in format "BRD-P{start_page}-R{{number}}" (e.g., "BRD-P4-R1")
+2. **text**: Extract the COMPLETE requirement text including all details, descriptions, and context. Combine ID, title, and description if they're separate.
+3. **page**: Identify the page number where it appears (between {start_page} and {end_page})
+
+**Output Format:**
+Return ONLY a JSON array in this exact format:
 [
   {{
-    "clause_id": "BRD-S3.2.1",
-    "text": "The system shall allow task creation...",
-    "page": 12
+    "clause_id": "FR-01",
+    "text": "Add Employee: The system shall allow an authorized HR user to create a new employee record by entering personal, contact, job, and statutory details.",
+    "page": 4
   }},
   {{
-    "clause_id": "BRD-S3.2.2", 
-    "text": "The system shall track approvals...",
-    "page": 13
+    "clause_id": "FR-02",
+    "text": "Mandatory Field Validation: The system shall enforce all mandatory fields before allowing submission.",
+    "page": 4
   }}
 ]
 
 If no requirements are found, return an empty array: []
 
-BRD Text to analyze:
+**BRD Text to analyze:**
 {chunk_text}
 
-Remember: Return ONLY the JSON array, no additional text or explanation."""
+**Remember:** 
+- Extract ALL requirements, even if in table format
+- Be inclusive - when in doubt, extract it
+- Return ONLY the JSON array, no explanation or markdown formatting"""
 
     try:
-        response = clients.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a requirements analyst expert at extracting structured requirement clauses from BRD documents. Always respond with valid JSON only."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-            max_tokens=4000
-        )
+        # Retry logic for connection errors
+        max_retries = 3
+        retry_delay = 2  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                response = clients.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "You are a requirements analyst expert at extracting ALL requirement clauses from BRD documents regardless of format (narrative, tabular, or mixed). You extract requirements from tables, lists, and prose. Be inclusive and comprehensive. Always respond with valid JSON only."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=4000,
+                    timeout=60.0  # 60 second timeout per request
+                )
+                
+                # If successful, break out of retry loop
+                break
+                
+            except Exception as conn_error:
+                if attempt < max_retries - 1:
+                    print(f"Connection attempt {attempt + 1} failed: {str(conn_error)}. Retrying in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    # Final attempt failed
+                    raise conn_error
         
         content = response.choices[0].message.content.strip()
         
@@ -231,7 +308,10 @@ Remember: Return ONLY the JSON array, no additional text or explanation."""
                 return []
                 
     except Exception as e:
-        print(f"Error calling LLM: {str(e)}")
+        error_type = type(e).__name__
+        print(f"Error calling LLM ({error_type}): {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
